@@ -15,8 +15,10 @@ import argparse
 #Shapefiles should have been downladed from
 #http://cdmaps.polisci.ucla.edu/
 #and unzipped in the current directory.
-for con in np.arange(106,114):
+#for con in np.arange(106,114):
+for con in [114]:
     fnam='districtShapes/districts'+str(con)+'.shp'
+    print fnam
     districts=fiona.open(fnam)
     lat1=districts.bounds[1]
     lat2=districts.bounds[3]
@@ -24,6 +26,9 @@ for con in np.arange(106,114):
 
     Districts=[]
     for pol in fiona.open(fnam):
+        if pol['geometry'] is None: 
+            print 'Bad polygon',pol['properties']
+            continue
 # Polygons
         coords=pol['geometry']['coordinates']
         if  pol['geometry']['type'] == 'Polygon':
@@ -38,10 +43,17 @@ for con in np.arange(106,114):
                 print pol['geometry']['type']
                 raise
             poly={'type':'Polygon','coordinates':[zip(x,y)]}
+            center=shape(poly).centroid
+            ccoords= shape(center).coords[:][0]
+            xc=ccoords[0];yc=ccoords[1]
+            lonc,latc=m(xc,yc,inverse=True,radians=False)
+
             Districts.append({'STATENAME':pol['properties']['STATENAME'],
             'DISTRICT':pol['properties']['DISTRICT'],
             'COUNTY':pol['properties']['COUNTY'],
-            'ID':pol['properties']['ID'],'area':shape(poly).area})
+                              'ID':pol['properties']['ID'],'area':shape(poly).area,'centroid':[lonc,latc]})
+#            print shape(poly).centroid
+
         elif  pol['geometry']['type'] == 'MultiPolygon':
 # Multiple Polygons
             for p in coords:
@@ -56,11 +68,16 @@ for con in np.arange(106,114):
                     print pol['geometry']['type']
                     raise
                 poly={'type':'Polygon','coordinates':[zip(x,y)]}
+                center=shape(poly).centroid
+                ccoords= shape(center).coords[:][0]
+                xc=ccoords[0];yc=ccoords[1]
+                lonc,latc=m(xc,yc,inverse=True,radians=False)
+
                 Districts.append({'STATENAME':pol['properties']['STATENAME'],
                 'DISTRICT':pol['properties']['DISTRICT'],
                 'COUNTY':pol['properties']['COUNTY'],
-                'ID':pol['properties']['ID'],'area':shape(poly).area})
-
+                                  'ID':pol['properties']['ID'],'area':shape(poly).area,'centroid':[lonc,latc]})
+#                print shape(poly).centroid.wkt
     Districts=sorted(Districts,key=lambda d:(d['STATENAME'],int(d['DISTRICT'])))
 # Write Areas to csv
     filenam='areas'+str(con)+'.txt'
@@ -72,16 +89,24 @@ for con in np.arange(106,114):
                 print d['STATENAME']
             if d['DISTRICT']==pr['DISTRICT']:
                 a=a+d['area']
+                center.append(d['centroid'])
             else:
-                line=pr['ID'],pr['DISTRICT'],str(a/1.e6),pr['STATENAME']+'\n'
+                line=pr['ID'],pr['DISTRICT'],'area='+str(a/1.e6),pr['STATENAME']+'\n'
+                f.write(','.join(line))
+                line=pr['ID'],pr['DISTRICT'],'centroid='+str(center)+'\n'
                 f.write(','.join(line))
                 a=d['area']
+                center=[d['centroid']]
                 pr=d.copy()
+
         else:
             pr=d.copy()
             a=d['area']
-
-    line=pr['ID'],pr['DISTRICT'],str(a/1.e6),pr['STATENAME']+'\n'
+            center=[d['centroid']]
+            
+    line=pr['ID'],pr['DISTRICT'],'area='+str(a/1.e6),pr['STATENAME']+'\n'
+    f.write(','.join(line))
+    line=pr['ID'],pr['DISTRICT'],'centroid='+str(center)+'\n'
     f.write(','.join(line))
     f.close()
 
